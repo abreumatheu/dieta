@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Acompanhamento de Dieta</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .meal {
+            background-color: #fff;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            font-weight: bold;
+        }
+        input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .training-time {
+            margin-bottom: 20px;
+        }
+        .training-time label {
+            font-size: 1.2em;
+        }
+        .button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .substitute {
+            margin-top: 10px;
+            font-style: italic;
+            color: #555;
+        }
+        #progressOutput {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sistema de Acompanhamento de Dieta</h1>
+
+        <div class="training-time">
+            <label for="training-time">Selecione o horário do treino ou dia sem treino:</label>
+            <select id="training-time" onchange="adjustDiet()">
+                <option value="none">Sem treino</option>
+                <option value="11">Treino às 11h</option>
+                <option value="15">Treino às 15h</option>
+            </select>
+        </div>
+
+        <div id="meals">
+            <!-- As refeições serão carregadas aqui -->
+        </div>
+
+        <button class="button" onclick="submitDiet()">Salvar Refeições</button>
+
+        <h2>Acompanhar Progresso</h2>
+        <div id="progressOutput"></div>
+
+        <button class="button" onclick="getProgress()">Ver Evolução</button>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, setDoc, doc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCX9QOIiaSLUsR5vMTf_rw_97HjWgU1STQ",
+            authDomain: "dieta-fc4f9.firebaseapp.com",
+            projectId: "dieta-fc4f9",
+            storageBucket: "dieta-fc4f9.appspot.com",
+            messagingSenderId: "483601161696",
+            appId: "1:483601161696:web:e4eacf7c8888bb63c39f85",
+            measurementId: "G-W360N0SH3M"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Cardápio completo com substituições
+        const meals = {
+            noTraining: {
+                breakfast: {
+                    name: "Café da Manhã (8h)",
+                    description: "2 ovos mexidos ou cozidos, 1 fatia de pão integral, 1 colher de requeijão light ou azeite de oliva, 1 copo de café com leite desnatado ou suco de laranja",
+                    substitute: "Ovos: Peito de frango ou 2 fatias de peito de peru. Pão integral: Tapioca ou crepioca. Requeijão light: Cottage ou abacate amassado."
+                },
+                snackMorning: {
+                    name: "Lanche da Manhã (10h - Opcional)",
+                    description: "1 fruta (maçã, pera ou banana), 10 amêndoas ou castanhas",
+                    substitute: "Frutas: Morangos ou mamão. Amêndoas: Nozes ou castanha-do-pará."
+                },
+                lunch: {
+                    name: "Almoço (12h)",
+                    description: "100g de arroz integral, 100g de feijão, 150g de peito de frango grelhado, salada de folhas verdes com azeite, vegetais cozidos",
+                    substitute: "Arroz integral: Quinoa ou batata-doce. Feijão: Lentilha ou grão-de-bico. Frango: Tilápia ou carne magra."
+                },
+                snackAfternoon: {
+                    name: "Lanche da Tarde (16h)",
+                    description: "1 iogurte natural com chia ou aveia, 1 fatia de pão integral com pasta de amendoim",
+                    substitute: "Iogurte: Kefir ou queijo cottage. Pão integral: Torrada integral."
+                },
+                dinner: {
+                    name: "Jantar (19h)",
+                    description: "100g de arroz integral ou batata-doce, 150g de peixe ou frango, vegetais salteados, salada verde com azeite",
+                    substitute: "Peixe: Frango ou tofu. Vegetais: Aspargos ou cogumelos."
+                },
+                supper: {
+                    name: "Ceia (Opcional)",
+                    description: "1 scoop de whey protein ou 100g de queijo cottage ou iogurte natural",
+                    substitute: "Whey: Caseína ou claras de ovos. Cottage: Ricota ou iogurte grego."
+                }
+            },
+            trainingMorning: {
+                breakfast: {
+                    name: "Café da Manhã (8h)",
+                    description: "2 ovos mexidos ou cozidos, 1 fatia de pão integral, 1 colher de requeijão light ou azeite de oliva, 1 copo de café com leite desnatado ou suco de laranja",
+                    substitute: "Ovos: Peito de frango ou 2 fatias de peito de peru. Pão integral: Tapioca ou crepioca. Requeijão light: Cottage ou abacate amassado."
+                },
+                preWorkoutMorning: {
+                    name: "Lanche pré-treino (10h)",
+                    description: "1 banana com pasta de amendoim ou 1 fatia de pão integral com peito de peru",
+                    substitute: "Banana: Maçã ou pera. Pão integral: Torrada integral."
+                },
+                lunch: {
+                    name: "Almoço (12h)",
+                    description: "100g de arroz integral, 100g de feijão, 150g de peito de frango grelhado, salada de folhas verdes com azeite, vegetais cozidos",
+                    substitute: "Arroz integral: Quinoa ou batata-doce. Feijão: Lentilha ou grão-de-bico. Frango: Tilápia ou carne magra."
+                },
+                postWorkout: {
+                    name: "Lanche pós-treino (12h)",
+                    description: "1 shake de whey protein com fruta ou sanduíche de pão integral com frango desfiado",
+                    substitute: "Whey: Caseína ou claras de ovos. Frango: Peito de peru ou tofu."
+                },
+                snackAfternoon: {
+                    name: "Lanche da Tarde (16h)",
+                    description: "1 iogurte natural com chia ou aveia, 1 fatia de pão integral com pasta de amendoim",
+                    substitute: "Iogurte: Kefir ou queijo cottage. Pão integral: Torrada integral."
+                },
+                dinner: {
+                    name: "Jantar (19h)",
+                    description: "100g de arroz integral ou batata-doce, 150g de peixe ou frango, vegetais salteados, salada verde com azeite",
+                    substitute: "Peixe: Frango ou tofu. Vegetais: Aspargos ou cogumelos."
+                }
+            },
+            trainingAfternoon: {
+                breakfast: {
+                    name: "Café da Manhã (8h)",
+                    description: "2 ovos mexidos ou cozidos, 1 fatia de pão integral, 1 colher de requeijão light ou azeite de oliva, 1 copo de café com leite desnatado ou suco de laranja",
+                    substitute: "Ovos: Peito de frango ou 2 fatias de peito de peru. Pão integral: Tapioca ou crepioca. Requeijão light: Cottage ou abacate amassado."
+                },
+                snackMorning: {
+                    name: "Lanche da Manhã (10h)",
+                    description: "1 fruta (maçã, pera ou banana), 10 amêndoas ou castanhas",
+                    substitute: "Frutas: Morangos ou mamão. Amêndoas: Nozes ou castanha-do-pará."
+                },
+                lunch: {
+                    name: "Almoço (12h)",
+                    description: "100g de arroz integral, 100g de feijão, 150g de peito de frango grelhado, salada de folhas verdes com azeite, vegetais cozidos",
+                    substitute: "Arroz integral: Quinoa ou batata-doce. Feijão: Lentilha ou grão-de-bico. Frango: Tilápia ou carne magra."
+                },
+                preWorkoutAfternoon: {
+                    name: "Lanche pré-treino (14h)",
+                    description: "1 fruta com mel ou 1 batata-doce pequena com 1 ovo",
+                    substitute: "Batata-doce: Inhame ou abóbora assada. Ovo: Peito de peru."
+                },
+                postWorkout: {
+                    name: "Lanche pós-treino (16h)",
+                    description: "1 shake de whey protein com fruta ou sanduíche de pão integral com frango desfiado",
+                    substitute: "Whey: Caseína ou claras de ovos. Frango: Peito de peru ou tofu."
+                },
+                dinner: {
+                    name: "Jantar (19h)",
+                    description: "100g de arroz integral ou batata-doce, 150g de peixe ou frango, vegetais salteados, salada verde com azeite",
+                    substitute: "Peixe: Frango ou tofu. Vegetais: Aspargos ou cogumelos."
+                }
+            }
+        };
+
+        // Função para ajustar a dieta com base no horário do treino
+        window.adjustDiet = function() {
+            const trainingTime = document.getElementById('training-time').value;
+            let selectedMeals = meals.noTraining;
+
+            if (trainingTime === '11') {
+                selectedMeals = meals.trainingMorning;
+            } else if (trainingTime === '15') {
+                selectedMeals = meals.trainingAfternoon;
+            }
+
+            const mealPlan = document.getElementById('meals');
+            mealPlan.innerHTML = ''; // Limpa as refeições anteriores
+
+            for (const [key, meal] of Object.entries(selectedMeals)) {
+                mealPlan.innerHTML += `
+                    <div class="meal">
+                        <label>
+                            <input type="checkbox" id="${key}"> 
+                            ${meal.name}: ${meal.description}
+                        </label>
+                        <div class="substitute">
+                            Substituições: ${meal.substitute}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Função para salvar as refeições
+        window.submitDiet = async function() {
+            const selectedMeals = [];
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const date = new Date().toISOString().split('T')[0]; // Data atual no formato YYYY-MM-DD
+
+            checkboxes.forEach((checkbox) => {
+                if (checkbox.checked) {
+                    selectedMeals.push(checkbox.id);
+                }
+            });
+
+            try {
+                await setDoc(doc(db, 'meals', `meal-${date}`), {
+                    completedMeals: selectedMeals,
+                    totalMeals: checkboxes.length,
+                    correctMeals: selectedMeals.length
+                });
+                alert('Refeições salvas com sucesso!');
+            } catch (e) {
+                console.error('Erro ao salvar refeições: ', e);
+            }
+        }
+
+        // Função para exibir o progresso
+        window.getProgress = async function() {
+            const progressOutput = document.getElementById('progressOutput');
+            progressOutput.innerHTML = '';
+
+            try {
+                const querySnapshot = await getDocs(collection(db, 'meals'));
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    progressOutput.innerHTML += `
+                        <p>Data: ${doc.id.replace('meal-', '')} | Refeições corretas: ${data.correctMeals}/${data.totalMeals}</p>
+                    `;
+                });
+            } catch (e) {
+                console.error('Erro ao obter progresso: ', e);
+            }
+        }
+
+    </script>
+</body>
+</html>
