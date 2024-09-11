@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Acompanhamento de Dieta</title>
+    <title>Sistema de Acompanhamento de Dieta e Evolução</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -16,8 +16,54 @@
             margin: 0 auto;
             padding: 20px;
         }
-        h1 {
+        h1, h2 {
             text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .charts, .history {
+            margin-top: 40px;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 40px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 12px;
+            text-align: center;
+        }
+        th {
+            background-color: #f4f4f4;
         }
         .meal {
             background-color: #fff;
@@ -35,23 +81,6 @@
         .training-time {
             margin-bottom: 20px;
         }
-        .training-time label {
-            font-size: 1.2em;
-        }
-        .button {
-            padding: 10px 20px;
-            background-color: #28a745;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-        }
-        .substitute {
-            margin-top: 10px;
-            font-style: italic;
-            color: #555;
-        }
         #progressOutput {
             margin-top: 20px;
         }
@@ -59,8 +88,9 @@
 </head>
 <body>
     <div class="container">
-        <h1>Sistema de Acompanhamento de Dieta</h1>
+        <h1>Sistema de Acompanhamento de Dieta e Evolução</h1>
 
+        <!-- Seção de Seleção de Horário do Treino e Dieta -->
         <div class="training-time">
             <label for="training-time">Selecione o horário do treino ou dia sem treino:</label>
             <select id="training-time" onchange="adjustDiet()">
@@ -80,15 +110,73 @@
         <div id="progressOutput"></div>
 
         <button class="button" onclick="getProgress()">Ver Evolução</button>
+
+        <!-- Nova Seção para Registrar e Acompanhar Bioimpedância -->
+        <h2>Registrar Bioimpedância</h2>
+        <div class="form-group">
+            <label for="weight">Peso (kg):</label>
+            <input type="number" id="weight" name="weight">
+        </div>
+        <div class="form-group">
+            <label for="bodyFat">Gordura Corporal (%):</label>
+            <input type="number" id="bodyFat" name="bodyFat">
+        </div>
+        <div class="form-group">
+            <label for="muscleMass">Massa Muscular (kg):</label>
+            <input type="number" id="muscleMass" name="muscleMass">
+        </div>
+        <div class="form-group">
+            <label for="visceralFat">Gordura Visceral (%):</label>
+            <input type="number" id="visceralFat" name="visceralFat">
+        </div>
+        <div class="form-group">
+            <label for="bodyWater">Água Corporal (%):</label>
+            <input type="number" id="bodyWater" name="bodyWater">
+        </div>
+        <button class="button" onclick="submitBioData()">Registrar</button>
+
+        <!-- Gráficos de Evolução -->
+        <div class="charts">
+            <h2>Evolução em Gráficos</h2>
+            <div class="chart-container">
+                <canvas id="weightChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="bodyFatChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="muscleMassChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Histórico de Bioimpedâncias -->
+        <div class="history">
+            <h2>Histórico de Bioimpedância</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Peso (kg)</th>
+                        <th>Gordura Corporal (%)</th>
+                        <th>Massa Muscular (kg)</th>
+                        <th>Gordura Visceral (%)</th>
+                        <th>Água Corporal (%)</th>
+                    </tr>
+                </thead>
+                <tbody id="bioHistory">
+                    <!-- Registros serão carregados aqui -->
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Firebase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module">
-        // Import Firebase functions
+        // Firebase setup
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, setDoc, doc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 
-        // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCX9QOIiaSLUsR5vMTf_rw_97HjWgU1STQ",
             authDomain: "dieta-fc4f9.firebaseapp.com",
@@ -99,106 +187,110 @@
             measurementId: "G-W360N0SH3M"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Cardápio completo com substituições
+        // Variável de refeições e substituições
         const meals = {
             noTraining: {
                 breakfast: {
                     name: "Café da Manhã (8h)",
                     description: "2 ovos mexidos ou cozidos, 1 fatia de pão integral, 1 colher de requeijão light ou azeite de oliva, 1 copo de café com leite desnatado ou suco de laranja",
-                    substitute: "Ovos: Peito de frango ou 2 fatias de peito de peru. Pão integral: Tapioca ou crepioca. Requeijão light: Cottage ou abacate amassado."
+                    substitute: "Pão integral: Tapioca, pão de centeio. Ovos: Tofu, cottage."
                 },
                 snackMorning: {
                     name: "Lanche da Manhã (10h - Opcional)",
-                    description: "1 fruta (maçã, pera ou banana), 10 amêndoas ou castanhas",
-                    substitute: "Frutas: Morangos ou mamão. Amêndoas: Nozes ou castanha-do-pará."
+                    description: "1 fruta (maçã, pera ou banana), 10 castanhas ou amêndoas",
+                    substitute: "Frutas: Mamão, morango. Castanhas: Nozes, pistache."
                 },
                 lunch: {
                     name: "Almoço (12h)",
-                    description: "100g de arroz integral, 100g de feijão, 150g de peito de frango grelhado, salada de folhas verdes com azeite, vegetais cozidos",
-                    substitute: "Arroz integral: Quinoa ou batata-doce. Feijão: Lentilha ou grão-de-bico. Frango: Tilápia ou carne magra."
+                    description: "150g de frango grelhado ou carne magra, 100g de arroz integral, 100g de feijão, salada de folhas verdes com azeite",
+                    substitute: "Frango: Carne vermelha magra, peixe. Arroz integral: Quinoa, batata-doce."
                 },
                 snackAfternoon: {
                     name: "Lanche da Tarde (16h)",
                     description: "1 iogurte natural com chia ou aveia, 1 fatia de pão integral com pasta de amendoim",
-                    substitute: "Iogurte: Kefir ou queijo cottage. Pão integral: Torrada integral."
+                    substitute: "Iogurte: Kefir, iogurte grego."
                 },
                 dinner: {
                     name: "Jantar (19h)",
-                    description: "100g de arroz integral ou batata-doce, 150g de peixe ou frango, vegetais salteados, salada verde com azeite",
-                    substitute: "Peixe: Frango ou tofu. Vegetais: Aspargos ou cogumelos."
+                    description: "150g de peixe ou peito de frango, 100g de arroz integral ou batata-doce, vegetais salteados ou cozidos (brócolis, abobrinha, cenoura)",
+                    substitute: "Peixe: Frango, tofu."
                 },
                 supper: {
                     name: "Ceia (Opcional)",
-                    description: "1 scoop de whey protein ou 100g de queijo cottage ou iogurte natural",
-                    substitute: "Whey: Caseína ou claras de ovos. Cottage: Ricota ou iogurte grego."
+                    description: "1 scoop de whey protein ou 100g de queijo cottage",
+                    substitute: "Whey: Caseína, proteína vegetal."
                 }
             },
             trainingMorning: {
                 breakfast: {
                     name: "Café da Manhã (8h)",
-                    description: "2 ovos mexidos ou cozidos, 1 fatia de pão integral, 1 colher de requeijão light ou azeite de oliva, 1 copo de café com leite desnatado ou suco de laranja",
-                    substitute: "Ovos: Peito de frango ou 2 fatias de peito de peru. Pão integral: Tapioca ou crepioca. Requeijão light: Cottage ou abacate amassado."
+                    description: "1 fatia de pão integral com requeijão light ou pasta de amendoim, 1 scoop de whey protein com água, 1 banana ou maçã",
+                    substitute: "Pão integral: Tapioca, pão de centeio. Whey: Caseína."
                 },
                 preWorkoutMorning: {
-                    name: "Lanche pré-treino (10h)",
-                    description: "1 banana com pasta de amendoim ou 1 fatia de pão integral com peito de peru",
-                    substitute: "Banana: Maçã ou pera. Pão integral: Torrada integral."
+                    name: "Lanche pré-treino (10h30)",
+                    description: "1 iogurte natural com chia ou aveia, 10 castanhas ou amêndoas",
+                    substitute: "Iogurte: Kefir, iogurte grego light."
                 },
                 lunch: {
-                    name: "Almoço (12h)",
-                    description: "100g de arroz integral, 100g de feijão, 150g de peito de frango grelhado, salada de folhas verdes com azeite, vegetais cozidos",
-                    substitute: "Arroz integral: Quinoa ou batata-doce. Feijão: Lentilha ou grão-de-bico. Frango: Tilápia ou carne magra."
-                },
-                postWorkout: {
-                    name: "Lanche pós-treino (12h)",
-                    description: "1 shake de whey protein com fruta ou sanduíche de pão integral com frango desfiado",
-                    substitute: "Whey: Caseína ou claras de ovos. Frango: Peito de peru ou tofu."
+                    name: "Almoço/Pós-treino (12h30-13h)",
+                    description: "150g de frango grelhado ou peixe, 100g de arroz integral, 100g de feijão, salada verde com azeite",
+                    substitute: "Frango: Peixe. Arroz: Quinoa, cevadinha."
                 },
                 snackAfternoon: {
                     name: "Lanche da Tarde (16h)",
                     description: "1 iogurte natural com chia ou aveia, 1 fatia de pão integral com pasta de amendoim",
-                    substitute: "Iogurte: Kefir ou queijo cottage. Pão integral: Torrada integral."
+                    substitute: "Iogurte: Kefir. Pão: Pão de centeio."
                 },
                 dinner: {
                     name: "Jantar (19h)",
-                    description: "100g de arroz integral ou batata-doce, 150g de peixe ou frango, vegetais salteados, salada verde com azeite",
-                    substitute: "Peixe: Frango ou tofu. Vegetais: Aspargos ou cogumelos."
+                    description: "150g de carne magra, 100g de batata-doce ou arroz integral, legumes cozidos no vapor (brócolis, abobrinha, cenoura)",
+                    substitute: "Carne: Frango, tofu. Legumes: Espinafre, couve-flor."
+                },
+                supper: {
+                    name: "Ceia (Opcional)",
+                    description: "1 scoop de whey protein com água ou 100g de queijo cottage",
+                    substitute: "Whey: Caseína."
                 }
             },
             trainingAfternoon: {
                 breakfast: {
                     name: "Café da Manhã (8h)",
-                    description: "2 ovos mexidos ou cozidos, 1 fatia de pão integral, 1 colher de requeijão light ou azeite de oliva, 1 copo de café com leite desnatado ou suco de laranja",
-                    substitute: "Ovos: Peito de frango ou 2 fatias de peito de peru. Pão integral: Tapioca ou crepioca. Requeijão light: Cottage ou abacate amassado."
+                    description: "1 fatia de pão integral com requeijão light, 2 ovos mexidos ou cozidos, 1 copo de café com leite desnatado",
+                    substitute: "Pão: Tapioca. Ovos: Tofu, peito de peru."
                 },
                 snackMorning: {
                     name: "Lanche da Manhã (10h)",
-                    description: "1 fruta (maçã, pera ou banana), 10 amêndoas ou castanhas",
-                    substitute: "Frutas: Morangos ou mamão. Amêndoas: Nozes ou castanha-do-pará."
+                    description: "1 fruta (maçã, pera ou banana), 10 castanhas ou amêndoas",
+                    substitute: "Frutas: Morango. Castanhas: Nozes."
                 },
                 lunch: {
                     name: "Almoço (12h)",
-                    description: "100g de arroz integral, 100g de feijão, 150g de peito de frango grelhado, salada de folhas verdes com azeite, vegetais cozidos",
-                    substitute: "Arroz integral: Quinoa ou batata-doce. Feijão: Lentilha ou grão-de-bico. Frango: Tilápia ou carne magra."
+                    description: "150g de peito de frango grelhado ou carne magra, 100g de arroz integral, 100g de feijão, salada de folhas verdes com azeite",
+                    substitute: "Frango: Carne vermelha magra, peixe. Arroz integral: Quinoa, cevadinha."
                 },
                 preWorkoutAfternoon: {
-                    name: "Lanche pré-treino (14h)",
-                    description: "1 fruta com mel ou 1 batata-doce pequena com 1 ovo",
-                    substitute: "Batata-doce: Inhame ou abóbora assada. Ovo: Peito de peru."
+                    name: "Lanche pré-treino (14h30)",
+                    description: "1 fatia de pão integral com pasta de amendoim, 1 scoop de whey protein com água",
+                    substitute: "Pão: Tapioca. Whey: Caseína."
                 },
                 postWorkout: {
                     name: "Lanche pós-treino (16h)",
-                    description: "1 shake de whey protein com fruta ou sanduíche de pão integral com frango desfiado",
-                    substitute: "Whey: Caseína ou claras de ovos. Frango: Peito de peru ou tofu."
+                    description: "1 iogurte natural com chia ou aveia, 10 castanhas ou amêndoas",
+                    substitute: "Iogurte: Kefir."
                 },
                 dinner: {
                     name: "Jantar (19h)",
-                    description: "100g de arroz integral ou batata-doce, 150g de peixe ou frango, vegetais salteados, salada verde com azeite",
-                    substitute: "Peixe: Frango ou tofu. Vegetais: Aspargos ou cogumelos."
+                    description: "150g de carne magra, 100g de batata-doce ou arroz integral, legumes cozidos no vapor (brócolis, abobrinha, cenoura)",
+                    substitute: "Carne: Frango, tofu. Legumes: Couve-flor."
+                },
+                supper: {
+                    name: "Ceia (Opcional)",
+                    description: "1 scoop de whey protein com água ou 100g de queijo cottage",
+                    substitute: "Whey: Caseína."
                 }
             }
         };
@@ -236,7 +328,7 @@
         window.submitDiet = async function() {
             const selectedMeals = [];
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const date = new Date().toISOString().split('T')[0]; // Data atual no formato YYYY-MM-DD
+            const date = new Date().toLocaleDateString('pt-BR'); // Data no formato DD/MM/YYYY
 
             checkboxes.forEach((checkbox) => {
                 if (checkbox.checked) {
@@ -245,7 +337,8 @@
             });
 
             try {
-                await setDoc(doc(db, 'meals', `meal-${date}`), {
+                await addDoc(collection(db, 'meals'), {
+                    date: date,
                     completedMeals: selectedMeals,
                     totalMeals: checkboxes.length,
                     correctMeals: selectedMeals.length
@@ -266,13 +359,129 @@
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     progressOutput.innerHTML += `
-                        <p>Data: ${doc.id.replace('meal-', '')} | Refeições corretas: ${data.correctMeals}/${data.totalMeals}</p>
+                        <p>Data: ${data.date} | Refeições corretas: ${data.correctMeals}/${data.totalMeals}</p>
                     `;
                 });
             } catch (e) {
                 console.error('Erro ao obter progresso: ', e);
             }
         }
+
+        // Função para registrar os dados de bioimpedância
+        window.submitBioData = async function() {
+            const weight = document.getElementById('weight').value;
+            const bodyFat = document.getElementById('bodyFat').value;
+            const muscleMass = document.getElementById('muscleMass').value;
+            const visceralFat = document.getElementById('visceralFat').value;
+            const bodyWater = document.getElementById('bodyWater').value;
+            const date = new Date().toLocaleDateString('pt-BR'); // Data no formato DD/MM/YYYY
+
+            await addDoc(collection(db, 'bioData'), {
+                date: date,
+                weight: weight,
+                bodyFat: bodyFat,
+                muscleMass: muscleMass,
+                visceralFat: visceralFat,
+                bodyWater: bodyWater
+            });
+
+            alert('Dados registrados com sucesso!');
+            loadBioHistory();
+        }
+
+        // Função para carregar o histórico de bioimpedância
+        window.loadBioHistory = async function() {
+            const bioHistoryTable = document.getElementById('bioHistory');
+            bioHistoryTable.innerHTML = '';
+            const querySnapshot = await getDocs(collection(db, 'bioData'));
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const row = `
+                    <tr>
+                        <td>${data.date}</td>
+                        <td>${data.weight} kg</td>
+                        <td>${data.bodyFat} %</td>
+                        <td>${data.muscleMass} kg</td>
+                        <td>${data.visceralFat} %</td>
+                        <td>${data.bodyWater} %</td>
+                    </tr>
+                `;
+                bioHistoryTable.innerHTML += row;
+            });
+        }
+
+        // Carregar histórico quando a página é aberta
+        window.onload = function() {
+            loadBioHistory();
+        }
+
+        // Funções de gráfico usando Chart.js
+        const ctxWeight = document.getElementById('weightChart').getContext('2d');
+        const weightChart = new Chart(ctxWeight, {
+            type: 'line',
+            data: {
+                labels: [], // Estas serão as datas dos registros
+                datasets: [{
+                    label: 'Peso (kg)',
+                    data: [], // Estes serão os pesos registrados
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        const ctxBodyFat = document.getElementById('bodyFatChart').getContext('2d');
+        const bodyFatChart = new Chart(ctxBodyFat, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Gordura Corporal (%)',
+                    data: [],
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        const ctxMuscleMass = document.getElementById('muscleMassChart').getContext('2d');
+        const muscleMassChart = new Chart(ctxMuscleMass, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Massa Muscular (kg)',
+                    data: [],
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
 
     </script>
 </body>
