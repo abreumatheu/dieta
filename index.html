@@ -26,7 +26,7 @@
             display: block;
             font-weight: bold;
         }
-        .form-group input {
+        .form-group input, .form-group select {
             width: 100%;
             padding: 8px;
             margin-top: 5px;
@@ -84,6 +84,9 @@
         #progressOutput {
             margin-top: 20px;
         }
+        .chart-header {
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -107,11 +110,32 @@
         <button class="button" onclick="submitDiet()">Salvar Refeições</button>
 
         <h2>Acompanhar Progresso</h2>
+        <div class="chart-header">
+            <label for="month-filter">Selecione o mês para visualizar:</label>
+            <select id="month-filter" onchange="filterProgressByMonth()">
+                <option value="">Todos</option>
+                <option value="01">Janeiro</option>
+                <option value="02">Fevereiro</option>
+                <option value="03">Março</option>
+                <option value="04">Abril</option>
+                <option value="05">Maio</option>
+                <option value="06">Junho</option>
+                <option value="07">Julho</option>
+                <option value="08">Agosto</option>
+                <option value="09">Setembro</option>
+                <option value="10">Outubro</option>
+                <option value="11">Novembro</option>
+                <option value="12">Dezembro</option>
+            </select>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="progressChart"></canvas>
+        </div>
+
+        <!-- Div para o progresso textual -->
         <div id="progressOutput"></div>
 
-        <button class="button" onclick="getProgress()">Ver Evolução</button>
-
-        <!-- Nova Seção para Registrar e Acompanhar Bioimpedância -->
         <h2>Registrar Bioimpedância</h2>
         <div class="form-group">
             <label for="weight">Peso (kg):</label>
@@ -135,45 +159,28 @@
         </div>
         <button class="button" onclick="submitBioData()">Registrar</button>
 
-        <!-- Gráficos de Evolução -->
-        <div class="charts">
-            <h2>Evolução em Gráficos</h2>
-            <div class="chart-container">
-                <canvas id="weightChart"></canvas>
-            </div>
-            <div class="chart-container">
-                <canvas id="bodyFatChart"></canvas>
-            </div>
-            <div class="chart-container">
-                <canvas id="muscleMassChart"></canvas>
-            </div>
-        </div>
-
         <!-- Histórico de Bioimpedâncias -->
-        <div class="history">
-            <h2>Histórico de Bioimpedância</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Peso (kg)</th>
-                        <th>Gordura Corporal (%)</th>
-                        <th>Massa Muscular (kg)</th>
-                        <th>Gordura Visceral (%)</th>
-                        <th>Água Corporal (%)</th>
-                    </tr>
-                </thead>
-                <tbody id="bioHistory">
-                    <!-- Registros serão carregados aqui -->
-                </tbody>
-            </table>
-        </div>
+        <h2>Histórico de Bioimpedância</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Peso (kg)</th>
+                    <th>Gordura Corporal (%)</th>
+                    <th>Massa Muscular (kg)</th>
+                    <th>Gordura Visceral (%)</th>
+                    <th>Água Corporal (%)</th>
+                </tr>
+            </thead>
+            <tbody id="bioHistory">
+                <!-- Registros serão carregados aqui -->
+            </tbody>
+        </table>
     </div>
 
     <!-- Firebase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module">
-        // Firebase setup
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 
@@ -189,6 +196,28 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+
+        const progressChart = new Chart(document.getElementById('progressChart'), {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Refeições corretas',
+                    data: [],
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
 
         // Variável de refeições e substituições
         const meals = {
@@ -352,19 +381,66 @@
         // Função para exibir o progresso
         window.getProgress = async function() {
             const progressOutput = document.getElementById('progressOutput');
-            progressOutput.innerHTML = '';
-
-            try {
-                const querySnapshot = await getDocs(collection(db, 'meals'));
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    progressOutput.innerHTML += `
-                        <p>Data: ${data.date} | Refeições corretas: ${data.correctMeals}/${data.totalMeals}</p>
-                    `;
-                });
-            } catch (e) {
-                console.error('Erro ao obter progresso: ', e);
+            if (!progressOutput) {
+                console.error("Elemento de progresso não encontrado.");
+                return;
             }
+            progressOutput.innerHTML = '';
+            const querySnapshot = await getDocs(collection(db, 'meals'));
+
+            const progressData = {};
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (!data.date) {
+                    console.error("Data indefinida.");
+                    return;
+                }
+                const dateParts = data.date.split('/');
+                const month = dateParts[1];
+
+                if (!progressData[month]) {
+                    progressData[month] = 0;
+                }
+
+                progressData[month] += data.correctMeals;
+            });
+
+            Object.keys(progressData).forEach((month) => {
+                progressOutput.innerHTML += `<p>Mês: ${month} | Refeições corretas: ${progressData[month]}</p>`;
+            });
+        }
+
+        // Função para filtrar o progresso por mês
+        window.filterProgressByMonth = async function() {
+            const selectedMonth = document.getElementById('month-filter').value;
+            const querySnapshot = await getDocs(collection(db, 'meals'));
+
+            const labels = [];
+            const data = [];
+
+            querySnapshot.forEach((doc) => {
+                const mealData = doc.data();
+                if (!mealData.date) {
+                    console.error("Data indefinida.");
+                    return;
+                }
+                const dateParts = mealData.date.split('/');
+                const month = dateParts[1];
+
+                if (selectedMonth === "" || month === selectedMonth) {
+                    labels.push(mealData.date);
+                    data.push(mealData.correctMeals);
+                }
+            });
+
+            if (labels.length === 0 || data.length === 0) {
+                console.warn("Nenhum dado encontrado para o mês selecionado.");
+            }
+
+            // Atualiza o gráfico com os dados filtrados
+            progressChart.data.labels = labels;
+            progressChart.data.datasets[0].data = data;
+            progressChart.update();
         }
 
         // Função para registrar os dados de bioimpedância
@@ -414,75 +490,8 @@
         // Carregar histórico quando a página é aberta
         window.onload = function() {
             loadBioHistory();
+            getProgress(); // Atualizar o progresso na inicialização
         }
-
-        // Funções de gráfico usando Chart.js
-        const ctxWeight = document.getElementById('weightChart').getContext('2d');
-        const weightChart = new Chart(ctxWeight, {
-            type: 'line',
-            data: {
-                labels: [], // Estas serão as datas dos registros
-                datasets: [{
-                    label: 'Peso (kg)',
-                    data: [], // Estes serão os pesos registrados
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-
-        const ctxBodyFat = document.getElementById('bodyFatChart').getContext('2d');
-        const bodyFatChart = new Chart(ctxBodyFat, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Gordura Corporal (%)',
-                    data: [],
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-
-        const ctxMuscleMass = document.getElementById('muscleMassChart').getContext('2d');
-        const muscleMassChart = new Chart(ctxMuscleMass, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Massa Muscular (kg)',
-                    data: [],
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-
     </script>
 </body>
 </html>
