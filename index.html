@@ -157,6 +157,12 @@
             <label for="bodyWater">Água Corporal (%):</label>
             <input type="number" id="bodyWater" name="bodyWater">
         </div>
+        <!-- Novo campo para Taxa Metabólica Basal -->
+        <div class="form-group">
+            <label for="basalMetabolicRate">Taxa Metabólica Basal (Kcal):</label>
+            <input type="number" id="basalMetabolicRate" name="basalMetabolicRate">
+        </div>
+
         <button class="button" onclick="submitBioData()">Registrar</button>
 
         <!-- Histórico de Bioimpedâncias -->
@@ -170,12 +176,19 @@
                     <th>Massa Muscular (kg)</th>
                     <th>Gordura Visceral (%)</th>
                     <th>Água Corporal (%)</th>
+                    <th>Taxa Metabólica Basal (Kcal)</th>
                 </tr>
             </thead>
             <tbody id="bioHistory">
                 <!-- Registros serão carregados aqui -->
             </tbody>
         </table>
+
+        <!-- Gráfico de Evolução da Bioimpedância -->
+        <h2>Evolução da Bioimpedância</h2>
+        <div class="chart-container">
+            <canvas id="bioChart"></canvas>
+        </div>
     </div>
 
     <!-- Firebase SDK -->
@@ -219,7 +232,10 @@
             }
         });
 
-        // Variável de refeições e substituições
+        // Variável global para o gráfico de bioimpedância
+        let bioChart;
+
+        // Definindo as refeições para diferentes horários de treino
         const meals = {
             noTraining: {
                 breakfast: {
@@ -327,12 +343,22 @@
         // Função para ajustar a dieta com base no horário do treino
         window.adjustDiet = function() {
             const trainingTime = document.getElementById('training-time').value;
-            let selectedMeals = meals.noTraining;
 
-            if (trainingTime === '11') {
+            let selectedMeals;
+            if (trainingTime === 'none') {
+                selectedMeals = meals.noTraining;
+            } else if (trainingTime === '11') {
                 selectedMeals = meals.trainingMorning;
             } else if (trainingTime === '15') {
                 selectedMeals = meals.trainingAfternoon;
+            } else {
+                console.error("Horário de treino não reconhecido.");
+                return;
+            }
+
+            if (!selectedMeals) {
+                console.error("Nenhuma refeição definida para este horário.");
+                return;
             }
 
             const mealPlan = document.getElementById('meals');
@@ -450,6 +476,7 @@
             const muscleMass = document.getElementById('muscleMass').value;
             const visceralFat = document.getElementById('visceralFat').value;
             const bodyWater = document.getElementById('bodyWater').value;
+            const basalMetabolicRate = document.getElementById('basalMetabolicRate').value; // Novo campo de TMB
             const date = new Date().toLocaleDateString('pt-BR'); // Data no formato DD/MM/YYYY
 
             await addDoc(collection(db, 'bioData'), {
@@ -458,18 +485,26 @@
                 bodyFat: bodyFat,
                 muscleMass: muscleMass,
                 visceralFat: visceralFat,
-                bodyWater: bodyWater
+                bodyWater: bodyWater,
+                basalMetabolicRate: basalMetabolicRate // Adicionando TMB
             });
 
             alert('Dados registrados com sucesso!');
             loadBioHistory();
         }
 
-        // Função para carregar o histórico de bioimpedância
+        // Função para carregar o histórico de bioimpedância e exibir gráfico
         window.loadBioHistory = async function() {
             const bioHistoryTable = document.getElementById('bioHistory');
             bioHistoryTable.innerHTML = '';
             const querySnapshot = await getDocs(collection(db, 'bioData'));
+
+            const dates = [];
+            const weights = [];
+            const bodyFats = [];
+            const muscleMasses = [];
+            const visceralFats = [];
+            const bodyWaters = [];
 
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
@@ -481,16 +516,107 @@
                         <td>${data.muscleMass} kg</td>
                         <td>${data.visceralFat} %</td>
                         <td>${data.bodyWater} %</td>
+                        <td>${data.basalMetabolicRate} Kcal</td>
                     </tr>
                 `;
                 bioHistoryTable.innerHTML += row;
+
+                // Adicionando dados ao gráfico
+                dates.push(data.date);
+                weights.push(data.weight);
+                bodyFats.push(data.bodyFat);
+                muscleMasses.push(data.muscleMass);
+                visceralFats.push(data.visceralFat);
+                bodyWaters.push(data.bodyWater);
+            });
+
+            if (bioChart) {
+                // Atualizando o gráfico com os dados de evolução
+                bioChart.data.labels = dates;
+                bioChart.data.datasets[0].data = weights;
+                bioChart.data.datasets[1].data = bodyFats;
+                bioChart.data.datasets[2].data = muscleMasses;
+                bioChart.data.datasets[3].data = visceralFats;
+                bioChart.data.datasets[4].data = bodyWaters;
+                bioChart.update();
+            } else {
+                console.error("Gráfico de bioimpedância não foi inicializado.");
+            }
+        }
+
+        // Função para inicializar o gráfico de bioimpedância
+        function initializeBioChart() {
+            const ctx = document.getElementById('bioChart').getContext('2d');
+            bioChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Peso (kg)',
+                            data: [],
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1,
+                            fill: false
+                        },
+                        {
+                            label: 'Gordura Corporal (%)',
+                            data: [],
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1,
+                            fill: false
+                        },
+                        {
+                            label: 'Massa Muscular (kg)',
+                            data: [],
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1,
+                            fill: false
+                        },
+                        {
+                            label: 'Gordura Visceral (%)',
+                            data: [],
+                            borderColor: 'rgba(153, 102, 255, 1)',
+                            borderWidth: 1,
+                            fill: false
+                        },
+                        {
+                            label: 'Água Corporal (%)',
+                            data: [],
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            borderWidth: 1,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Data'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Valores'
+                            },
+                            beginAtZero: true
+                        }
+                    }
+                }
             });
         }
 
-        // Carregar histórico quando a página é aberta
+        // Carregar histórico e inicializar gráfico quando a página é aberta
         window.onload = function() {
-            loadBioHistory();
-            getProgress(); // Atualizar o progresso na inicialização
+            initializeBioChart(); // Inicializa o gráfico de bioimpedância
+            loadBioHistory();     // Carrega o histórico de bioimpedância
+            getProgress();        // Atualiza o progresso na inicialização
         }
     </script>
 </body>
